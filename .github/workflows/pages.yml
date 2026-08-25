@@ -1,0 +1,42 @@
+name: Deploy www/ naar GitHub Pages
+
+# Pages serveert bij "deploy from a branch" alleen vanuit / of /docs, nooit
+# vanuit /www. Deze workflow publiceert www/ als artifact, zodat de site in een
+# submap kan staan en README.md, VERSION en .git buiten de documentroot blijven.
+# Vereist: Settings -> Pages -> Source = "GitHub Actions".
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Laat een lopende deploy afmaken; nieuwere pushes wachten op hun beurt.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Controleer dat CNAME meegaat
+        # Zonder CNAME in het artifact vergeet Pages het custom domain bij elke
+        # deploy, en valt static.marktkraam.site terug op github.io.
+        run: test -f www/CNAME || { echo "www/CNAME ontbreekt"; exit 1; }
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: www
+      - id: deployment
+        uses: actions/deploy-pages@v4
