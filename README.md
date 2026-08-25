@@ -10,15 +10,17 @@ er zelf naartoe surft, niet gaat rondkijken maar op de echte site belandt.
 
 ## Indeling
 
-Alles wat publiek is, staat in **`www/`**. Die map is de documentroot van de
-webserver; de rest van de repo hoort daarbuiten te blijven, zodat `README.md`,
-`VERSION` en `.git/` nooit via het web opvraagbaar zijn.
+Alles wat publiek is, staat in **`www/`**. Alleen die map wordt gepubliceerd;
+de rest van de repo blijft erbuiten, zodat `README.md` en `VERSION` niet via het
+web opvraagbaar zijn.
 
 ```
-www/            ← documentroot: alleen dit wordt geserveerd
+www/            ← documentroot: alleen dit wordt gepubliceerd
   index.html    doorverwijzing naar https://marktkraam.site/
   404.html      identiek, voor onbekende paden
   robots.txt    Disallow: /
+  CNAME         custom domain voor GitHub Pages
+.github/workflows/pages.yml   publiceert www/ naar Pages
 README.md       ← blijft buiten de documentroot
 VERSION
 ```
@@ -28,6 +30,8 @@ VERSION
 | `www/index.html` | Doorverwijzing naar `https://marktkraam.site/` — `location.replace()` plus een `meta refresh` als JavaScript uitstaat, met een zichtbare link als beide falen. |
 | `www/404.html` | Identiek aan `index.html`, zodat een onbekend pad doorverwijst in plaats van een kale foutpagina te tonen. |
 | `www/robots.txt` | `Disallow: /` — niets hier hoort geïndexeerd te worden. `index.html` draagt daarnaast `noindex` en een canonical naar `marktkraam.site`. |
+| `www/CNAME` | Zet het custom domain voor GitHub Pages. Moet in de gepubliceerde map staan, dus in `www/` en niet in de repo-root. |
+| `.github/workflows/pages.yml` | Publiceert `www/` naar Pages bij elke push naar `main`. |
 | `VERSION` | Versiebron volgens de Flux76-baseline (`MAJOR.MINOR.PATCH`). |
 
 De pagina heeft bewust geen huisstijl. Kraam heeft nog geen vastgestelde
@@ -39,7 +43,8 @@ platformpagina.
 
 Zet ze in een map **onder `www/`**, bijvoorbeeld `www/mail/logo.png`, en verwijs
 ernaar zonder `www` in de URL: `https://static.marktkraam.site/mail/logo.png`.
-De map `www` is de documentroot en verdwijnt dus uit het pad. Raak
+Alleen de inhoud van `www` wordt gepubliceerd, dus de mapnaam verdwijnt uit het
+pad. Raak
 `www/index.html` niet aan — dat is de doorverwijzing.
 
 Twee dingen om te onthouden bij bestanden die in e-mail gebruikt worden: een
@@ -49,57 +54,34 @@ maar maakt niets privé — alles wat hier staat is publiek voor wie de URL kent
 
 ## Deploy
 
-Dit domein draait **niet** achter Cloudflare, dus er is geen edge die iets voor
-ons afhandelt. Er is niets te bouwen: wijs de documentroot naar `www/` en klaar.
-Bij een deploy die de repo op de server uitcheckt, is dat de enige aanpassing —
-de root van de checkout is níet de documentroot.
+De site draait op **GitHub Pages** met custom domain `static.marktkraam.site`
+(dat is wat `www/CNAME` regelt). Elke push naar `main` publiceert `www/` via
+`.github/workflows/pages.yml`; er is verder niets te bouwen of te kopiëren.
 
-De serverconfiguratie moet drie dingen doen:
+Dat de site in `www/` staat en niet in de repo-root, vraagt één instelling:
 
-1. **Alleen de root doorverwijzen** — nooit de hele server. Een `301` over alles
-   stuurt ook `/mail/logo.png` weg, en dan is de host nutteloos. `index.html`
-   doet dit vanzelf goed omdat het één bestand op één pad is; wie liever een
-   echte `301` heeft, moet die aan het pad `/` binden.
-2. **Directory listing uitzetten.** Dit is de belangrijkste maatregel tegen
-   rondkijken: zonder listing kun je `/mail/` niet openen om te zien wat er staat.
-   De doorverwijzing op de root doet daar niets aan.
-3. **`404.html` als foutpagina aanwijzen**, anders krijgt een onbekend pad de
-   standaardfoutpagina van de server.
+> **Settings → Pages → Source = "GitHub Actions"** (niet "Deploy from a branch").
 
-Voor nginx:
+Die stap is niet optioneel. Pages serveert bij "deploy from a branch" uitsluitend
+vanuit `/` of `/docs` — `/www` is geen keuze die het menu aanbiedt. Staat de
+source op een branch, dan wordt `www/` genegeerd en publiceert Pages de repo-root,
+inclusief deze README, met een 404 op de doorverwijzing tot gevolg.
 
-```nginx
-root /var/www/static.marktkraam.site/www;         # let op: /www
-autoindex off;                                    # geen directory listing
-error_page 404 /404.html;
+Twee dingen die Pages gratis goed doet en die dus nergens geconfigureerd hoeven te
+worden: `404.html` wordt vanzelf als foutpagina gebruikt, en er is geen directory
+listing, dus `/mail/` valt niet te doorbladeren om te zien wat er staat.
 
-location = / {
-    return 301 https://marktkraam.site/;          # alleen de root
-}
-```
+Eén ding dat Pages níet kan: een echte `301` op de root. Dat kan daar alleen als
+statische pagina, en precies dat doet `www/index.html`.
 
-Voor Caddy:
+### Als dit ooit naar een gewone webserver verhuist
 
-```caddy
-static.marktkraam.site {
-    root * /var/www/static.marktkraam.site/www
-    redir / https://marktkraam.site/ permanent    # alleen het exacte pad /
-    file_server                                   # zonder browse: geen listing
-    handle_errors {
-        rewrite * /404.html
-        file_server
-    }
-}
-```
-
-Voor Apache, in de vhost:
-
-```apache
-DocumentRoot /var/www/static.marktkraam.site/www
-Options -Indexes
-ErrorDocument 404 /404.html
-RedirectMatch permanent ^/$ https://marktkraam.site/
-```
+Wijs de documentroot dan naar `www/` (dus `.../static.marktkraam.site/www`, niet
+de root van de checkout), zet directory listing uit (`autoindex off` bij nginx,
+`Options -Indexes` bij Apache) en wijs `404.html` als foutpagina aan. Een `301`
+mag dan wel, maar bind die aan het pad `/` en niet aan de hele server — anders
+wordt ook `/mail/logo.png` weggestuurd en is de host nutteloos. `www/CNAME` is
+buiten Pages betekenisloos en kan dan weg.
 
 ## Lokaal bekijken
 
