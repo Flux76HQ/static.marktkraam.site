@@ -8,13 +8,26 @@ Er hoort **geen site** te staan. De root verwijst door naar
 <https://marktkraam.site>, zodat wie het domein uit een afbeeldings-URL plukt en
 er zelf naartoe surft, niet gaat rondkijken maar op de echte site belandt.
 
-## Wat er nu staat
+## Indeling
+
+Alles wat publiek is, staat in **`www/`**. Die map is de documentroot van de
+webserver; de rest van de repo hoort daarbuiten te blijven, zodat `README.md`,
+`VERSION` en `.git/` nooit via het web opvraagbaar zijn.
+
+```
+www/            ← documentroot: alleen dit wordt geserveerd
+  index.html    doorverwijzing naar https://marktkraam.site/
+  404.html      identiek, voor onbekende paden
+  robots.txt    Disallow: /
+README.md       ← blijft buiten de documentroot
+VERSION
+```
 
 | Bestand | Doel |
 |---|---|
-| `index.html` | Doorverwijzing naar `https://marktkraam.site/` — `location.replace()` plus een `meta refresh` als JavaScript uitstaat, met een zichtbare link als beide falen. |
-| `404.html` | Identiek aan `index.html`, zodat een onbekend pad doorverwijst in plaats van een kale foutpagina te tonen. |
-| `robots.txt` | `Disallow: /` — niets hier hoort geïndexeerd te worden. `index.html` draagt daarnaast `noindex` en een canonical naar `marktkraam.site`. |
+| `www/index.html` | Doorverwijzing naar `https://marktkraam.site/` — `location.replace()` plus een `meta refresh` als JavaScript uitstaat, met een zichtbare link als beide falen. |
+| `www/404.html` | Identiek aan `index.html`, zodat een onbekend pad doorverwijst in plaats van een kale foutpagina te tonen. |
+| `www/robots.txt` | `Disallow: /` — niets hier hoort geïndexeerd te worden. `index.html` draagt daarnaast `noindex` en een canonical naar `marktkraam.site`. |
 | `VERSION` | Versiebron volgens de Flux76-baseline (`MAJOR.MINOR.PATCH`). |
 
 De pagina heeft bewust geen huisstijl. Kraam heeft nog geen vastgestelde
@@ -24,9 +37,10 @@ platformpagina.
 
 ## Bestanden toevoegen
 
-Zet ze in een map onder de root, bijvoorbeeld `mail/logo.png` of `demo/`, en
-verwijs ernaar met de volle URL: `https://static.marktkraam.site/mail/logo.png`.
-Raak `index.html` niet aan — dat is de doorverwijzing.
+Zet ze in een map **onder `www/`**, bijvoorbeeld `www/mail/logo.png`, en verwijs
+ernaar zonder `www` in de URL: `https://static.marktkraam.site/mail/logo.png`.
+De map `www` is de documentroot en verdwijnt dus uit het pad. Raak
+`www/index.html` niet aan — dat is de doorverwijzing.
 
 Twee dingen om te onthouden bij bestanden die in e-mail gebruikt worden: een
 bestand dat eenmaal is verstuurd blijft jaren opgevraagd worden, dus verplaats of
@@ -36,8 +50,9 @@ maar maakt niets privé — alles wat hier staat is publiek voor wie de URL kent
 ## Deploy
 
 Dit domein draait **niet** achter Cloudflare, dus er is geen edge die iets voor
-ons afhandelt. Kopieer de bestanden naar de documentroot van de webserver die
-`static.marktkraam.site` serveert; er is niets te bouwen.
+ons afhandelt. Er is niets te bouwen: wijs de documentroot naar `www/` en klaar.
+Bij een deploy die de repo op de server uitcheckt, is dat de enige aanpassing —
+de root van de checkout is níet de documentroot.
 
 De serverconfiguratie moet drie dingen doen:
 
@@ -54,7 +69,7 @@ De serverconfiguratie moet drie dingen doen:
 Voor nginx:
 
 ```nginx
-root /var/www/static.marktkraam.site;
+root /var/www/static.marktkraam.site/www;         # let op: /www
 autoindex off;                                    # geen directory listing
 error_page 404 /404.html;
 
@@ -67,7 +82,7 @@ Voor Caddy:
 
 ```caddy
 static.marktkraam.site {
-    root * /var/www/static.marktkraam.site
+    root * /var/www/static.marktkraam.site/www
     redir / https://marktkraam.site/ permanent    # alleen het exacte pad /
     file_server                                   # zonder browse: geen listing
     handle_errors {
@@ -77,13 +92,24 @@ static.marktkraam.site {
 }
 ```
 
-Voor Apache, in de vhost of `.htaccess`:
+Voor Apache, in de vhost:
 
 ```apache
+DocumentRoot /var/www/static.marktkraam.site/www
 Options -Indexes
 ErrorDocument 404 /404.html
 RedirectMatch permanent ^/$ https://marktkraam.site/
 ```
+
+## Lokaal bekijken
+
+```sh
+python3 -m http.server 8080 --directory www
+# open http://localhost:8080 — je hoort direct op marktkraam.site te belanden
+```
+
+Test de fallback door JavaScript uit te zetten: de `meta refresh` neemt het dan
+over.
 
 ## Grenzen buiten deze repository
 
